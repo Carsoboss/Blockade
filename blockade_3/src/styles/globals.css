@@ -1,0 +1,13 @@
+/* globals.css */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+
+body {
+  font-family: 'JetBrains Mono', monospace;
+}
+@keyframes fade-in-out {
+  0%, 100% { opacity: 0; }
+  20%, 80% { opacity: 1; }
+}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
