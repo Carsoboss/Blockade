@@ -74,9 +74,9 @@ const InfiniteCarousel: React.FC<InfiniteCarouselProps> = ({ onClick }) => {
       return controls;
     };
 
-    const controls1 = animateRow(xTranslation1, duration * 1.2);
-    const controls2 = animateRow(xTranslation2, duration * 1); // Slightly slower
-    const controls3 = animateRow(xTranslation3, duration * 1.1); // Slightly slower
+    const controls1 = animateRow(xTranslation1, duration * 2.4);
+    const controls2 = animateRow(xTranslation2, duration * 2); // Slightly slower
+    const controls3 = animateRow(xTranslation3, duration * 2.2); // Slightly slower
 
     return () => {
       controls1?.stop();

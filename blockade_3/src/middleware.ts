@@ -1,9 +1,7 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
 // Define a route matcher for protected routes
-const isProtectedRoute = createRouteMatcher([
-  "/catbot(.*)", // Protect all routes that start with /catbot
-]);
+const isProtectedRoute = createRouteMatcher(["/ai(.*)", "/billing"]);
 
 export default clerkMiddleware((auth, req) => {
   // Protect routes based on the defined matcher

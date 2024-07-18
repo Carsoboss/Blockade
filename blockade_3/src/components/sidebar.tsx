@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Disclosure } from "@headlessui/react";
 import { Bars3Icon, XMarkIcon } from "@heroicons/react/24/outline";
 import { Pencil } from "lucide-react";
-
+import { useRouter } from "next/router";
 import { EllipsisIcon } from "./icons";
 
 interface SidebarProps {
@@ -13,7 +13,7 @@ interface SidebarProps {
   setChatOptionsOpen: (open: boolean) => void;
   setModalPosition: (position: { top: number; left: number }) => void;
   handleRename: (oldTitle: string, newTitle: string) => void;
-  selectedChatId: string | null; // Add this prop to identify the selected chat
+  selectedChatId: string | null;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -24,10 +24,11 @@ const Sidebar: React.FC<SidebarProps> = ({
   setChatOptionsOpen,
   setModalPosition,
   handleRename,
-  selectedChatId, // Add this prop to identify the selected chat
+  selectedChatId,
 }) => {
   const [editingChat, setEditingChat] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState<string>("");
+  const router = useRouter();
 
   const handleEllipsisClick = (
     event: React.MouseEvent<HTMLButtonElement>,
@@ -49,7 +50,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   const handleEditBlur = (chat: string) => {
     if (editingTitle.trim() === "") {
-      setEditingTitle(chat); // Revert to original title if input is empty
+      setEditingTitle(chat);
     } else {
       handleRename(chat, editingTitle);
     }
@@ -92,7 +93,9 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
           <div className="hidden sm:flex sm:h-full sm:w-64 sm:flex-col sm:overflow-y-auto sm:bg-gray-800 sm:p-4">
             <div className="mb-6 flex items-center space-x-2">
-              <h1 className="text-xl font-semibold text-gray-200">Lex3 AI</h1>
+              <a href="/" className="text-xl font-semibold text-gray-200">
+                Lex3AI
+              </a>
             </div>
             <button
               className="mb-4 flex w-full items-center space-x-2 rounded p-2 text-left hover:bg-gray-700"
@@ -116,7 +119,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     >
                       <button
                         className="w-full text-left text-gray-200"
-                        onClick={() => selectChat(chat.id)}
+                        onClick={() => router.push(`/ai/${chat.id}`)}
                         onDoubleClick={() =>
                           handleEditClick(chat.id, chat.title)
                         }
@@ -146,9 +149,9 @@ const Sidebar: React.FC<SidebarProps> = ({
           <Disclosure.Panel className="fixed inset-0 z-20 w-3/4 bg-gray-800 sm:hidden">
             <div className="p-4">
               <div className="mb-4 flex justify-between">
-                <h1 className="text-xl font-semibold text-gray-200">
-                  Blockade AI
-                </h1>
+                <a href="/" className="text-xl font-semibold text-gray-200">
+                  Lex3AI
+                </a>
                 <Disclosure.Button className="inline-flex items-center justify-center rounded-md p-2 text-gray-400 hover:bg-gray-700 hover:text-gray-200 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white">
                   <span className="sr-only">Close main menu</span>
                   <XMarkIcon className="block h-6 w-6" aria-hidden="true" />
@@ -178,7 +181,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                       >
                         <button
                           className="w-full text-left text-gray-200"
-                          onClick={() => selectChat(chat.id)}
+                          onClick={() => router.push(`/ai/${chat.id}`)}
                           onDoubleClick={() =>
                             handleEditClick(chat.id, chat.title)
                           }

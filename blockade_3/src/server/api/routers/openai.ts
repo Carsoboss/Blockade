@@ -1,27 +1,9 @@
-import ky from "ky";
+import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { z } from "zod";
-
-import {
-  createTRPCRouter,
-  protectedProcedure,
-  publicProcedure,
-} from "~/server/api/trpc";
+import { generateText } from "ai";
+import { openai } from "@ai-sdk/openai";
 
 const API_KEY = process.env.OPENAI_API_KEY;
-const API_URL = "https://api.openai.com/v1/chat/completions";
-
-interface OpenAIRequest {
-  model: string;
-  messages: { role: string; content: string }[];
-}
-
-interface OpenAIResponse {
-  choices: {
-    message: {
-      content: string;
-    };
-  }[];
-}
 
 export const openaiRouter = createTRPCRouter({
   getOpenAIResponse: protectedProcedure
@@ -34,40 +16,16 @@ export const openaiRouter = createTRPCRouter({
     .mutation(async ({ input }) => {
       const { instructions, userMessage } = input;
 
-      const messages = JSON.parse(userMessage) as {
-        role: string;
-        content: string;
-      }[];
+      const result = await generateText({
+        model: openai("gpt-4o"),
+        prompt: `System: ${instructions}\nUser: ${userMessage}`,
+      });
 
-      const requestData: OpenAIRequest = {
-        model: "gpt-4",
-        messages: [{ role: "system", content: instructions }, ...messages],
+      return {
+        message: result.text,
       };
-
-      const headers = {
-        Authorization: `Bearer ${API_KEY}`,
-      };
-
-      try {
-        const response = await ky
-          .post(API_URL, {
-            json: requestData,
-            headers,
-          })
-          .json<OpenAIResponse>();
-
-        if (!response.choices || response.choices.length === 0) {
-          throw new Error("No choices found in the OpenAI response");
-        }
-
-        return {
-          message: response.choices[0]?.message?.content ?? "No content found",
-        };
-      } catch (error) {
-        console.error("Error fetching response from OpenAI:", error);
-        throw new Error("Error fetching response from OpenAI");
-      }
     }),
+
   getAllChatBots: protectedProcedure.query(async ({ ctx }) => {
     return await ctx.prisma.chatBot.findMany({
       where: {
@@ -80,22 +38,24 @@ export const openaiRouter = createTRPCRouter({
       },
     });
   }),
+
   createChat: protectedProcedure
     .input(
       z.object({
         userId: z.string(),
-        orgId: z.string(),
+        orgId: z.string().nullable(),
         name: z.string(),
+        model: z.string(), // Add model to schema
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const { userId, orgId, name } = input;
+      const { userId, orgId, name, model } = input;
       return await ctx.prisma.chat.create({
         data: {
           userId,
           orgId,
           name,
-          archived: false,
+          model,
           deleted: false,
         },
       });
@@ -150,7 +110,6 @@ export const openaiRouter = createTRPCRouter({
       });
     }),
 
-  // New endpoints for fetching user chats and chat messages
   getChatsByUser: protectedProcedure
     .input(z.object({ userId: z.string() }))
     .query(async ({ input, ctx }) => {

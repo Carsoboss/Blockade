@@ -1,14 +1,13 @@
-"use client";
-
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/router";
 import { UserButton, useUser } from "@clerk/nextjs";
-
-import InfiniteCarousel from "../components/infiniteCarousel";
-import Chat from "../components/chat";
-import { ChatOptionsModal } from "../components/modals";
-import ModelSelector from "../components/selector";
-import Sidebar from "../components/sidebar";
-import { api } from "~/utils/api"; // Import the api
+import InfiniteCarousel from "../../components/infiniteCarousel";
+import Chat from "../../components/chat";
+import { ChatOptionsModal } from "../../components/modals";
+import ModelSelector from "../../components/selector";
+import Sidebar from "../../components/sidebar";
+import { api } from "~/utils/api";
+import { LoadingSpinner } from "../../components/loading";
 
 interface Message {
   user: string;
@@ -22,9 +21,12 @@ interface Chat {
   model: string;
 }
 
-const AI: React.FC = () => {
+const AIChat = () => {
   const { user } = useUser();
   const userId = user?.id ?? "";
+  const router = useRouter();
+  const { chatId } = router.query;
+
   const [selectedModel, setSelectedModel] = useState("CATBot");
   const [messages, setMessages] = useState<Message[]>([]);
   const [chats, setChats] = useState<Chat[]>([]);
@@ -32,23 +34,23 @@ const AI: React.FC = () => {
   const [chatOptionsOpen, setChatOptionsOpen] = useState(false);
   const [modalPosition, setModalPosition] = useState({ top: 0, left: 0 });
   const [showCarousel, setShowCarousel] = useState(true);
-  const [isTyping, setIsTyping] = useState(false); // Add typing state
-  const [chatIndex, setChatIndex] = useState(0); // Track the highest index used for chat naming
+  const [isTyping, setIsTyping] = useState(false);
+  const [chatIndex, setChatIndex] = useState(0);
 
   const { mutateAsync: getOpenAIResponse } =
     api.openai.getOpenAIResponse.useMutation();
-  const { data: chatBots, isLoading: isLoadingChatBots } =
-    api.openai.getAllChatBots.useQuery();
+  const { data: chatBots } = api.openai.getAllChatBots.useQuery();
   const { data: userChats, refetch: refetchChats } =
     api.openai.getChatsByUser.useQuery({ userId });
   const createChatMutation = api.openai.createChat.useMutation();
   const deleteChatMutation = api.openai.deleteChat.useMutation();
   const updateChatNameMutation = api.openai.updateChatName.useMutation();
   const createMessageMutation = api.openai.createMessage.useMutation();
-  const getMessagesByChatQuery = api.openai.getMessagesByChat.useQuery(
-    { chatId: selectedChat ?? "" },
-    { enabled: !!selectedChat },
-  );
+  const { data: chatMessages, refetch: refetchMessages } =
+    api.openai.getMessagesByChat.useQuery(
+      { chatId: chatId as string },
+      { enabled: !!chatId },
+    );
 
   useEffect(() => {
     if (userChats) {
@@ -59,46 +61,53 @@ const AI: React.FC = () => {
           model: selectedModel,
         })),
       );
-      // Set the highest chat index used based on existing chat titles
       const maxIndex = Math.max(
         0,
-        ...userChats
-          .map((chat) => chat.name.match(/\d+$/))
-          .filter((match) => match !== null)
-          .map((match) => parseInt(match![0])),
+        ...userChats.map((chat) => {
+          const match = chat.name.match(/Chat (\d+)/);
+          return match && match[1] ? parseInt(match[1], 10) : 0;
+        }),
       );
       setChatIndex(maxIndex);
     }
   }, [userChats]);
 
   useEffect(() => {
-    if (getMessagesByChatQuery.data) {
+    if (chatMessages) {
       setMessages(
-        getMessagesByChatQuery.data.map((msg) => ({
+        chatMessages.map((msg) => ({
           user: msg.origin === "USER" ? "You" : "Bot",
           text: msg.content,
           model: selectedModel,
         })),
       );
-      setShowCarousel(getMessagesByChatQuery.data.length === 0);
+      setShowCarousel(chatMessages.length === 0);
     }
-  }, [getMessagesByChatQuery.data]);
+  }, [chatMessages]);
+
+  useEffect(() => {
+    if (chatId && chatId !== "default") {
+      setSelectedChat(chatId as string);
+      refetchMessages();
+    } else {
+      setSelectedChat(null);
+    }
+  }, [chatId, refetchMessages]);
 
   const newChat = async () => {
     const newChatTitle = `Chat ${chatIndex + 1}`;
     const newChat = await createChatMutation.mutateAsync({
       userId,
-      orgId: "", // Set orgId if required
+      orgId: null,
       name: newChatTitle,
+      model: selectedModel,
     });
     setChats([
       ...chats,
       { id: newChat.id, title: newChatTitle, model: selectedModel },
     ]);
-    setSelectedChat(newChat.id);
-    setMessages([]);
-    setShowCarousel(true); // Show carousel for new chat
-    setChatIndex(chatIndex + 1); // Increment the chat index
+    setChatIndex(chatIndex + 1);
+    router.push(`/ai/${newChat.id}`);
   };
 
   const sendMessage = async (text: string, sender = "You") => {
@@ -111,7 +120,7 @@ const AI: React.FC = () => {
       ...prevMessages,
       { user: sender, text, model: selectedModel },
     ]);
-    setShowCarousel(false); // Hide carousel after sending a message
+    setShowCarousel(false);
 
     await createMessageMutation.mutateAsync({
       chatId: selectedChat,
@@ -121,15 +130,16 @@ const AI: React.FC = () => {
     });
 
     if (sender === "You") {
-      setIsTyping(true); // Set typing state to true
+      setIsTyping(true);
       const conversation = messages.map((msg) => ({
         role: msg.user === "You" ? "user" : "system",
         content: msg.text,
       }));
-
-      const instructions =
-        chatBots?.find((bot) => bot.name === selectedModel)?.instructions ??
-        "Your instructions here";
+      const chatBot = chatBots?.find((bot) => bot.name === selectedModel);
+      if (!chatBot || !chatBot.instructions) {
+        throw new Error("No instructions found for the selected model.");
+      }
+      const instructions = chatBot.instructions;
 
       try {
         const response = await getOpenAIResponse({
@@ -144,16 +154,11 @@ const AI: React.FC = () => {
           ...prevMessages,
           { user: "Bot", text: response.message, model: selectedModel },
         ]);
-
-        const botId =
-          chatBots?.find((bot) => bot.name === selectedModel)?.id ??
-          selectedModel;
-
         await createMessageMutation.mutateAsync({
           chatId: selectedChat,
           content: response.message,
           origin: "BOT",
-          originId: botId,
+          originId: selectedModel,
         });
       } catch (error) {
         console.error("Error fetching OpenAI response:", error);
@@ -166,7 +171,7 @@ const AI: React.FC = () => {
           },
         ]);
       } finally {
-        setIsTyping(false); // Set typing state to false
+        setIsTyping(false);
       }
     }
   };
@@ -175,17 +180,20 @@ const AI: React.FC = () => {
     const newChatTitle = `Chat ${chatIndex + 1}`;
     const newChat = await createChatMutation.mutateAsync({
       userId,
-      orgId: "", // Set orgId if required
+      orgId: null,
       name: newChatTitle,
+      model: selectedModel,
     });
     setChats([
       ...chats,
       { id: newChat.id, title: newChatTitle, model: selectedModel },
     ]);
+    setChatIndex(chatIndex + 1);
     setSelectedChat(newChat.id);
+    router.push(`/ai/${newChat.id}`);
+
     setMessages([{ user: sender, text, model: selectedModel }]);
-    setShowCarousel(false); // Hide carousel after creating a new chat
-    setChatIndex(chatIndex + 1); // Increment the chat index
+    setShowCarousel(false);
 
     await createMessageMutation.mutateAsync({
       chatId: newChat.id,
@@ -195,10 +203,12 @@ const AI: React.FC = () => {
     });
 
     if (sender === "You") {
-      setIsTyping(true); // Set typing state to true
-      const instructions =
-        chatBots?.find((bot) => bot.name === selectedModel)?.instructions ??
-        "Your instructions here";
+      setIsTyping(true);
+      const chatBot = chatBots?.find((bot) => bot.name === selectedModel);
+      if (!chatBot || !chatBot.instructions) {
+        throw new Error("No instructions found for the selected model.");
+      }
+      const instructions = chatBot.instructions;
 
       try {
         const response = await getOpenAIResponse({
@@ -210,16 +220,11 @@ const AI: React.FC = () => {
           ...prevMessages,
           { user: "Bot", text: response.message, model: selectedModel },
         ]);
-
-        const botId =
-          chatBots?.find((bot) => bot.name === selectedModel)?.id ??
-          selectedModel;
-
         await createMessageMutation.mutateAsync({
           chatId: newChat.id,
           content: response.message,
           origin: "BOT",
-          originId: botId,
+          originId: selectedModel,
         });
       } catch (error) {
         console.error("Error fetching OpenAI response:", error);
@@ -232,7 +237,7 @@ const AI: React.FC = () => {
           },
         ]);
       } finally {
-        setIsTyping(false); // Set typing state to false
+        setIsTyping(false);
       }
     }
   };
@@ -242,9 +247,11 @@ const AI: React.FC = () => {
   };
 
   const selectChat = async (chatId: string) => {
-    setSelectedChat(chatId);
-    setShowCarousel(false); // Hide carousel when selecting a chat
-    await getMessagesByChatQuery.refetch();
+    if (chatId) {
+      router.push(`/ai/${chatId}`);
+      setShowCarousel(false);
+      await refetchMessages();
+    }
   };
 
   const handleRename = async (oldId: string, newTitle: string) => {
@@ -263,9 +270,16 @@ const AI: React.FC = () => {
   const handleDelete = async () => {
     if (selectedChat) {
       await deleteChatMutation.mutateAsync({ chatId: selectedChat });
-      setChats(chats.filter((chat) => chat.id !== selectedChat));
+      const remainingChats = chats.filter((chat) => chat.id !== selectedChat);
+      setChats(remainingChats);
       setSelectedChat(null);
       setMessages([]);
+
+      if (remainingChats.length > 0) {
+        router.push(`/ai/${remainingChats[0]?.id}`);
+      } else {
+        router.push(`/ai/default`);
+      }
     }
     setChatOptionsOpen(false);
   };
@@ -280,7 +294,7 @@ const AI: React.FC = () => {
         setChatOptionsOpen={setChatOptionsOpen}
         setModalPosition={setModalPosition}
         handleRename={handleRename}
-        selectedChatId={selectedChat} // Pass selectedChatId to Sidebar
+        selectedChatId={selectedChat}
       />
       <div className="flex flex-1 flex-col overflow-hidden">
         <div className="flex items-center justify-between p-2 sm:justify-start sm:space-x-4">
@@ -300,7 +314,7 @@ const AI: React.FC = () => {
             messages={messages}
             sendMessage={sendMessage}
             selectedModel={selectedModel}
-            isTyping={isTyping} // Pass typing state to Chat component
+            isTyping={isTyping}
           />
         </div>
         {selectedChat && (
@@ -326,4 +340,4 @@ const AI: React.FC = () => {
   );
 };
 
-export default AI;
+export default AIChat;

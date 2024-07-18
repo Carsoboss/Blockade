@@ -22,6 +22,7 @@ model Message {
   updatedAt DateTime @updatedAt
   originId  String
   chatId    String
+  threadId  String?
   content   String
   chat      Chat     @relation(fields: [chatId], references: [id])
   origin    String
@@ -34,9 +35,10 @@ model Chat {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   userId    String
-  archived  Boolean
   deleted   Boolean
-  orgId     String
+  orgId     String?
+  threadId  String?
+  model     String
   name      String
   messages  Message[]
 }
@@ -44,20 +46,20 @@ model Chat {
 model Waitlist {
   id        String   @id @default(cuid())
   userId    String
+  userEmail String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  exiresAt  DateTime
 
   @@index([userId])
 }
 
 model Subscription {
-  id         String   @id @default(cuid())
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  subType    String
-  userId     String
-  expiration DateTime
+  id               String   @id @default(cuid())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  userId           String
+  stripeCustomerId String
+  complianceChecks Int      @default(5)
 
   @@index([userId])
 }
