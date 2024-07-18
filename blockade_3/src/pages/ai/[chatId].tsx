@@ -7,7 +7,7 @@ import { ChatOptionsModal } from "../../components/modals";
 import ModelSelector from "../../components/selector";
 import Sidebar from "../../components/sidebar";
 import { api } from "~/utils/api";
-import { LoadingSpinner } from "../../components/loading";
+import { LoadingSpinner, LoadingPage } from "../../components/loading";
 
 interface Message {
   user: string;
@@ -21,7 +21,27 @@ interface Chat {
   model: string;
 }
 
+const useSubscriptionCheck = () => {
+  const { user, isLoaded } = useUser();
+  const { data: hasSubscription, isLoading } =
+    api.stripe.hasSubscription.useQuery(undefined, {
+      enabled: !!user,
+    });
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isLoaded && user && !isLoading) {
+      if (!hasSubscription) {
+        router.push("/billing");
+      }
+    }
+  }, [isLoaded, user, hasSubscription, isLoading, router]);
+
+  return { isLoading: isLoading || !isLoaded };
+};
+
 const AIChat = () => {
+  const { isLoading } = useSubscriptionCheck();
   const { user } = useUser();
   const userId = user?.id ?? "";
   const router = useRouter();
@@ -308,15 +328,21 @@ const AIChat = () => {
             <UserButton />
           </div>
         </div>
-        <div className="flex flex-1 flex-col overflow-y-auto">
-          {showCarousel && <InfiniteCarousel onClick={handleCarouselClick} />}
-          <Chat
-            messages={messages}
-            sendMessage={sendMessage}
-            selectedModel={selectedModel}
-            isTyping={isTyping}
-          />
-        </div>
+        {isLoading ? (
+          <div className="flex flex-1 items-center justify-center">
+            <LoadingSpinner size={60} />
+          </div>
+        ) : (
+          <div className="flex flex-1 flex-col overflow-y-auto">
+            {showCarousel && <InfiniteCarousel onClick={handleCarouselClick} />}
+            <Chat
+              messages={messages}
+              sendMessage={sendMessage}
+              selectedModel={selectedModel}
+              isTyping={isTyping}
+            />
+          </div>
+        )}
         {selectedChat && (
           <ChatOptionsModal
             isOpen={chatOptionsOpen}

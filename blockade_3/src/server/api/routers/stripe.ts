@@ -8,11 +8,26 @@ const stripe = new Stripe(String(process.env.STRIPE_SECRET_KEY), {
   apiVersion: "2024-06-20",
 });
 
+const ensureSubscription = async (userId: string) => {
+  const subscription = await prisma.subscription.findFirst({
+    where: { userId },
+  });
+
+  if (!subscription) {
+    return false;
+  }
+
+  const subscriptions = await stripe.subscriptions.list({
+    customer: subscription.stripeCustomerId,
+  });
+
+  return subscriptions.data.length > 0;
+};
+
 export const stripeRouter = createTRPCRouter({
   createCustomerIfNull: protectedProcedure.mutation(async ({ ctx }) => {
     const { userId } = ctx;
 
-    // Fetch the user's email and name from Clerk
     const clerkUser = await clerkClient.users.getUser(userId);
     const userEmail = clerkUser.primaryEmailAddress?.emailAddress;
     const userName =
@@ -28,32 +43,30 @@ export const stripeRouter = createTRPCRouter({
 
     if (!subscription) {
       const customer = await stripe.customers.create({
-        email: userEmail, // Use the actual email from Clerk
-        name: userName, // Use the actual name from Clerk
+        email: userEmail,
+        name: userName,
       });
 
       subscription = await prisma.subscription.create({
         data: {
           userId,
-          stripeCustomerId: customer.id, // Store Stripe customer ID in a separate field
-          complianceChecks: 5, // Set the default compliance checks
+          stripeCustomerId: customer.id,
+          complianceChecks: 5,
         },
       });
     } else {
-      // Check if the customer exists in Stripe
       try {
         await stripe.customers.retrieve(subscription.stripeCustomerId);
       } catch (error) {
-        // If the customer doesn't exist, create a new one
         const customer = await stripe.customers.create({
-          email: userEmail, // Use the actual email from Clerk
-          name: userName, // Use the actual name from Clerk
+          email: userEmail,
+          name: userName,
         });
 
         subscription = await prisma.subscription.update({
           where: { id: subscription.id },
           data: {
-            stripeCustomerId: customer.id, // Update the subscription with the new Stripe customer ID
+            stripeCustomerId: customer.id,
           },
         });
       }
@@ -83,22 +96,7 @@ export const stripeRouter = createTRPCRouter({
 
   hasSubscription: protectedProcedure.query(async ({ ctx }) => {
     const { userId } = ctx;
-
-    if (userId) {
-      const subscription = await prisma.subscription.findFirst({
-        where: { userId },
-      });
-
-      if (subscription) {
-        const subscriptions = await stripe.subscriptions.list({
-          customer: String(subscription.stripeCustomerId),
-        });
-
-        return subscriptions.data.length > 0;
-      }
-    }
-
-    return false;
+    return await ensureSubscription(userId);
   }),
 
   getSubscriptionType: protectedProcedure.query(async ({ ctx }) => {
@@ -146,11 +144,16 @@ export const stripeRouter = createTRPCRouter({
       customer: subscription.stripeCustomerId,
       line_items: [
         {
-          price: "price_1PcsPKJVf2xIHTdAeUl6rKPU", // Replace with your price ID
+          price: "price_1PcsPKJVf2xIHTdAeUl6rKPU",
           quantity: 1,
         },
       ],
       mode: "subscription",
+      discounts: [
+        {
+          coupon: "giBnwIfb", // Add your coupon ID here
+        },
+      ],
     });
 
     return { url: checkoutSession.url };

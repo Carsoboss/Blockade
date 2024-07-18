@@ -8,13 +8,18 @@ const Navbar: React.FC = () => {
   return (
     <header className="fixed z-50 w-full bg-gray-800 p-4">
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-4 lg:px-8">
-        <div className="text-2xl font-bold text-white">Lex3</div>
+        <Link href="/" className="text-2xl font-bold text-white">
+          Lex3
+        </Link>
         <div className="hidden items-center space-x-4 md:flex">
+          <Link
+            href="/#features"
+            className="block px-4 py-2 text-white hover:text-gray-400"
+          >
+            Features
+          </Link>
           <Link href="/billing" className="text-white hover:text-gray-400">
             Billing
-          </Link>
-          <Link href="#features" className="text-white hover:text-gray-400">
-            Features
           </Link>
           <Link href="/ai/default" className="text-white hover:text-gray-400">
             Lex3AI
@@ -59,16 +64,16 @@ const Navbar: React.FC = () => {
       {isOpen && (
         <div className="bg-gray-800 md:hidden">
           <Link
+            href="/#features"
+            className="block px-4 py-2 text-gray-400 hover:text-gray-300"
+          >
+            Features
+          </Link>
+          <Link
             href="/billing"
             className="block px-4 py-2 text-gray-400 hover:text-gray-300"
           >
             Billing
-          </Link>
-          <Link
-            href="#features"
-            className="block px-4 py-2 text-gray-400 hover:text-gray-300"
-          >
-            Features
           </Link>
           <Link
             href="/ai/default"
